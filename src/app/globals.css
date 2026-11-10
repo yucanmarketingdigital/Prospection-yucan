@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Couleurs Yucan : magenta, violet, jaune et blanc */
+@theme {
+  --color-magenta: #e0197d;
+  --color-magenta-dark: #b8106a;
+  --color-pink: #f2509b;
+  --color-purple: #8e1a8c;
+  --color-violet: #5a0f78;
+  --color-yellow: #ffd21f;
+  --color-ink: #2a1033;
+  --color-muted: #6f5a78;
+  --color-line: #ecdff0;
+  --color-surface: #faf5fb;
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-bodoni);
+  --font-accent: var(--font-oswald);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* Fond dégradé de la marque avec la trame de points */
+.yucan-gradient {
+  background:
+    radial-gradient(circle at 0% 100%, rgba(255, 255, 255, 0.18) 1.5px, transparent 1.6px) 0 0 / 14px 14px,
+    radial-gradient(ellipse at 20% 0%, #f0388f 0%, transparent 55%),
+    linear-gradient(160deg, #e0197d 0%, #a81487 45%, #5a0f78 100%);
+}
+.yucan-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.22) 1.2px, transparent 1.3px);
+  background-size: 12px 12px;
+  mask-image: linear-gradient(to top right, black, transparent 60%);
+}
+.btn-gradient {
+  background-image: linear-gradient(120deg, #e0197d, #8e1a8c);
 }

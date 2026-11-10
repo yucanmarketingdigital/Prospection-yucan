@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 320px; margin: 0; font: 14px system-ui, sans-serif; color: #2a1033; }
+    header { background: linear-gradient(160deg, #e0197d, #8e1a8c 55%, #5a0f78); color: #fff; padding: 16px; }
+    .logo { font: 500 24px Georgia, serif; letter-spacing: .08em; }
+    .sub { color: #ffd21f; font-weight: 600; font-size: 12px; }
+    main { padding: 14px 16px 16px; }
+    label { display: block; font-weight: 600; font-size: 12px; margin: 10px 0 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ecdff0; border-radius: 8px; background: #faf5fb; }
+    button { width: 100%; margin-top: 10px; padding: 9px; border: 0; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .primary { background: linear-gradient(120deg, #e0197d, #8e1a8c); color: #fff; }
+    .accent { background: #ffd21f; color: #5a0f78; }
+    .ghost { background: #faf5fb; color: #5a0f78; }
+    .muted { color: #6f5a78; font-size: 12px; margin-top: 8px; }
+    .ok { color: #1a7f37; } .err { color: #cf222e; }
+  </style>
+</head>
+<body>
+  <header><div class="logo">YUCAN</div><div class="sub">Prospection LinkedIn</div></header>
+  <main>
+    <div id="connected" hidden>
+      <div id="state"></div>
+      <div id="last" class="muted"></div>
+      <button id="toggle" class="accent"></button>
+      <button id="run" class="ghost">Exécuter une action maintenant</button>
+      <button id="open" class="primary">Ouvrir l'application</button>
+      <button id="edit" class="ghost">Changer la connexion</button>
+    </div>
+    <div id="setup" hidden>
+      <p class="muted" style="margin-top:0">Dans l'application : Réglages → Extension Chrome → « Générer une clé de connexion ».</p>
+      <label>Adresse de l'application</label>
+      <input id="appUrl" placeholder="https://yucan-prospection.vercel.app">
+      <label>Clé de connexion</label>
+      <input id="token" placeholder="yuc_…">
+      <button id="save" class="primary">Relier l'extension</button>
+      <div id="setupMsg" class="muted"></div>
+    </div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

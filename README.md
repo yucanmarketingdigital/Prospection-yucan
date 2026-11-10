@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Yucan Prospection
 
-## Getting Started
+Application de prospection LinkedIn assistée par l'IA, aux couleurs de Yucan Marketing digital.
 
-First, run the development server:
+- **Application web** (Next.js sur Vercel + Supabase) : comptes, prospects, scénarios, analyse de profil et rédaction de messages par l'IA (clé Claude ou OpenAI de l'utilisatrice), validation des messages, statistiques.
+- **Extension Chrome** (`extension/`) : exécute les actions LinkedIn (visite, invitation, message) dans le navigateur de l'utilisatrice, dans sa session LinkedIn. Le mot de passe LinkedIn n'est jamais demandé.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Fonctionnement
+
+```
+Application (Vercel)  ←→  Supabase (données, RLS)
+        ↑  « prochaine action ? » / résultat
+Extension Chrome  →  onglet LinkedIn de l'utilisatrice
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le moteur de scénarios vit côté serveur (`src/lib/engine.ts`). Chaque minute, l'extension appelle `POST /api/extension/next`. Le serveur vérifie la pause, les horaires, les limites du jour et le délai entre deux actions, puis renvoie au plus une action. L'extension l'exécute et renvoie le résultat à `POST /api/extension/report`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Installation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Créez un projet Supabase et appliquez `supabase/migrations/0001_init.sql`.
+2. Copiez `.env.example` en `.env.local` et remplissez les clés.
+3. `npm install` puis `npm run dev`.
+4. Sur Vercel, importez le dépôt et ajoutez les trois variables d'environnement.
+5. Dans Supabase → Authentication → URL Configuration, mettez l'adresse Vercel comme *Site URL*.
 
-## Learn More
+## Extension
 
-To learn more about Next.js, take a look at the following resources:
+`./scripts/pack-extension.sh` régénère `public/yucan-extension.zip`, téléchargeable depuis Réglages → Extension Chrome.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Sécurité du compte LinkedIn
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+LinkedIn interdit l'automatisation dans ses conditions d'utilisation. L'application limite le risque avec des quotas quotidiens, des horaires, des pauses aléatoires et un arrêt automatique en cas de vérification de sécurité, mais elle ne le supprime pas.

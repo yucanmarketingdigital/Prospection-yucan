@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Yucan Prospection",
+  "version": "0.2.0",
+  "description": "Exécute dans votre navigateur les actions LinkedIn de votre application Yucan Prospection.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://www.linkedin.com/*"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "action": {
+    "default_title": "Yucan Prospection",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}
