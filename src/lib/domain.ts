@@ -4,8 +4,14 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type StepType = "visit" | "wait" | "invite" | "wait_accept" | "message";
 
+export type Attachment = { path: string; name: string; type: string; size: number };
+
+export const ATTACHMENT_ACCEPT = "image/*,video/*,audio/*,application/pdf";
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024; // limite LinkedIn pour un fichier joint
+
 export type Step = {
   type: StepType;
+  attachments?: Attachment[]; // message
   days?: number; // wait
   maxDays?: number; // wait_accept
   noteMode?: "aucune" | "modele" | "ia"; // invite
@@ -14,6 +20,8 @@ export type Step = {
   template?: string;
   aiInstruction?: string;
 };
+
+export type ProspectList = { id: string; name: string; source: "linkedin" | "fichier" | "manuel"; created_at: string };
 
 export type Campaign = { id: string; user_id: string; name: string; steps: Step[]; created_at: string };
 
@@ -46,6 +54,7 @@ export type Prospect = {
   education: string;
   status: ProspectStatus;
   campaign_id: string | null;
+  list_id: string | null;
   step_index: number;
   next_at: string | null;
   locked_until: string | null;
@@ -58,6 +67,7 @@ export type Prospect = {
   approved_message: { text: string; stepIndex: number } | null;
   analysis: Analysis | null;
   sent_messages: { t: string; text: string }[];
+  custom: Record<string, string>;
   history: { t: string; text: string }[];
   created_at: string;
   updated_at: string;
@@ -122,8 +132,23 @@ export function normalizeUrl(u: string): string | null {
   return m ? `https://www.linkedin.com/in/${m[1].toLowerCase()}/` : null;
 }
 
+export const VARIABLES = [
+  { key: "prenom", label: "Prénom" },
+  { key: "nom", label: "Nom" },
+  { key: "nomcomplet", label: "Nom complet" },
+  { key: "entreprise", label: "Entreprise" },
+  { key: "poste", label: "Poste" },
+  { key: "ville", label: "Ville" },
+] as const;
+
+// Transforme un en-tête de colonne CSV en nom de variable : « Ice breaker » → icebreaker
+export function variableKey(label: string) {
+  return label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
 export function fillTemplate(tpl: string | undefined, p: Partial<Prospect>): string {
   const vars: Record<string, string | undefined> = {
+    ...Object.fromEntries(Object.entries(p.custom || {}).map(([k, v]) => [variableKey(k), v])),
     prenom: p.first_name,
     nom: p.last_name,
     nomcomplet: p.full_name,
@@ -131,10 +156,7 @@ export function fillTemplate(tpl: string | undefined, p: Partial<Prospect>): str
     entreprise: p.company,
     ville: p.location,
   };
-  return String(tpl || "").replace(/\{\{\s*([a-zA-Zéè_]+)\s*\}\}/g, (_, k: string) => {
-    const key = k.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/_/g, "");
-    return vars[key] ?? "";
-  });
+  return String(tpl || "").replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_, k: string) => vars[variableKey(k)] ?? "");
 }
 
 // À partir de l'étape fromIndex, saute les étapes « Attendre » en cumulant le délai.
@@ -219,4 +241,11 @@ export function localNow(timezone: string) {
 
 export function isRecent(ts: string | null | undefined, ms: number) {
   return !!ts && Date.now() - new Date(ts).getTime() < ms;
+}
+
+// Les N derniers jours (AAAA-MM-JJ) dans le fuseau de l'utilisatrice, du plus récent au plus ancien.
+export function lastDays(n: number, timezone: string) {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "Europe/Paris" });
+  const now = Date.now();
+  return Array.from({ length: n }, (_, i) => fmt.format(new Date(now - i * DAY_MS)));
 }

@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { STEP_LABELS, fillTemplate, type Campaign, type Step, type StepType } from "@/lib/domain";
+import { STEP_LABELS, fillTemplate, type Campaign, type Prospect, type Step, type StepType } from "@/lib/domain";
+import { TemplateField } from "@/components/template-field";
 import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
+import { AttachmentPicker } from "@/components/attachment-picker";
 import { saveCampaign, suggestScenario } from "../../actions";
 
 const DEFAULTS: Record<StepType, Step> = {
@@ -14,9 +16,10 @@ const DEFAULTS: Record<StepType, Step> = {
   wait_accept: { type: "wait_accept", maxDays: 14 },
   message: { type: "message", mode: "ia", approval: true, aiInstruction: "" },
 };
-const VARS = "{{prenom}} {{nom}} {{entreprise}} {{poste}} {{ville}}";
 
-export function ScenarioEditor({ campaign }: { campaign: Campaign }) {
+type VarsCtx = { customKeys: string[]; sample: Partial<Prospect> };
+
+export function ScenarioEditor({ campaign, customKeys, sample }: { campaign: Campaign } & VarsCtx) {
   const router = useRouter();
   const [name, setName] = useState(campaign.name);
   const [steps, setSteps] = useState<Step[]>(campaign.steps);
@@ -87,7 +90,7 @@ export function ScenarioEditor({ campaign }: { campaign: Campaign }) {
                   <button className="rounded-lg px-2 text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => setSteps(steps.filter((_, j) => j !== i))} title="Supprimer">✕</button>
                 </div>
               </div>
-              <StepFields step={s} onChange={(patch) => update(i, patch)} />
+              <StepFields step={s} onChange={(patch) => update(i, patch)} vars={{ customKeys, sample }} />
             </Card>
           </div>
         ))}
@@ -107,7 +110,7 @@ export function ScenarioEditor({ campaign }: { campaign: Campaign }) {
   );
 }
 
-function StepFields({ step: s, onChange }: { step: Step; onChange: (p: Partial<Step>) => void }) {
+function StepFields({ step: s, onChange, vars }: { step: Step; onChange: (p: Partial<Step>) => void; vars: VarsCtx }) {
   if (s.type === "wait")
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -137,8 +140,8 @@ function StepFields({ step: s, onChange }: { step: Step; onChange: (p: Partial<S
         </Select>
         {s.noteMode === "modele" && (
           <>
-            <Label hint={`300 caractères max · ${VARS}`}>Modèle</Label>
-            <Textarea value={s.template ?? ""} onChange={(e) => onChange({ template: e.target.value })} placeholder="Bonjour {{prenom}}, …" />
+            <Label hint="300 caractères max">Modèle</Label>
+            <TemplateField {...vars} maxLength={300} value={s.template ?? ""} onChange={(template) => onChange({ template })} placeholder="Bonjour {{prenom}}, …" />
           </>
         )}
         {s.noteMode === "ia" && (
@@ -159,8 +162,8 @@ function StepFields({ step: s, onChange }: { step: Step; onChange: (p: Partial<S
       </Select>
       {s.mode === "modele" ? (
         <>
-          <Label hint={VARS}>Modèle</Label>
-          <Textarea value={s.template ?? ""} onChange={(e) => onChange({ template: e.target.value })} placeholder="Bonjour {{prenom}}, …" />
+          <Label>Modèle</Label>
+          <TemplateField {...vars} value={s.template ?? ""} onChange={(template) => onChange({ template })} placeholder="Bonjour {{prenom}}, …" />
         </>
       ) : (
         <>
@@ -168,6 +171,7 @@ function StepFields({ step: s, onChange }: { step: Step; onChange: (p: Partial<S
           <Textarea value={s.aiInstruction ?? ""} onChange={(e) => onChange({ aiInstruction: e.target.value })} placeholder="Ex. : remercie pour la connexion, rebondis sur son poste actuel et pose une question ouverte." />
         </>
       )}
+      <AttachmentPicker value={s.attachments ?? []} onChange={(attachments) => onChange({ attachments })} />
       <label className="mt-3 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={!!s.approval} onChange={(e) => onChange({ approval: e.target.checked })} className="accent-magenta" />
         Je veux relire et valider chaque message avant l&apos;envoi

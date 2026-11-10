@@ -133,7 +133,7 @@ export async function nextAction(
             continue;
           }
         }
-        payload = { text, fullName: p.full_name };
+        payload = { text, fullName: p.full_name, attachments: await signAttachments(db, step) };
       }
     } catch (e) {
       await registerError(db, userId, p, (e as Error).message);
@@ -149,6 +149,17 @@ export async function nextAction(
   }
   if (force) await db.from("settings").update({ force_next: false }).eq("user_id", userId);
   return { wait: "Aucune action possible (limites du jour atteintes ou messages à valider)." };
+}
+
+// Liens temporaires (15 min) pour que l'extension télécharge les pièces jointes.
+async function signAttachments(db: SupabaseClient, step: Step) {
+  const out: { url: string; name: string; type: string }[] = [];
+  for (const a of step.attachments || []) {
+    const { data, error } = await db.storage.from("attachments").createSignedUrl(a.path, 15 * 60);
+    if (error || !data) throw new Error(`Pièce jointe introuvable : ${a.name}`);
+    out.push({ url: data.signedUrl, name: a.name, type: a.type });
+  }
+  return out;
 }
 
 async function registerError(db: SupabaseClient, userId: string, p: Prospect, message: string) {

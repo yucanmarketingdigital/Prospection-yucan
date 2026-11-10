@@ -37,14 +37,14 @@ export async function runNow() {
 
 // ---------- Prospects ----------
 
-export async function importAction(items: ImportItem[], campaignId: string) {
+export async function importAction(items: ImportItem[], campaignId: string, list: { id?: string; newName?: string; source?: "fichier" | "manuel" }) {
   const { supabase, user } = await ctx();
-  const res = await importProspects(supabase, user.id, items, campaignId);
+  const res = await importProspects(supabase, user.id, items, campaignId, list);
   revalidatePath("/prospects");
   return res;
 }
 
-export async function bulkAction(ids: string[], action: "start" | "pause" | "resume" | "delete", campaignId?: string) {
+export async function bulkAction(ids: string[], action: "start" | "pause" | "resume" | "delete" | "list", campaignId?: string, listId?: string) {
   const { supabase, user } = await ctx();
   if (!ids.length) return;
   if (action === "start") {
@@ -62,6 +62,8 @@ export async function bulkAction(ids: string[], action: "start" | "pause" | "res
       .in("id", ids)
       .in("status", ["pause", "erreur"])
       .not("campaign_id", "is", null);
+  } else if (action === "list") {
+    await supabase.from("prospects").update({ list_id: listId || null }).in("id", ids);
   } else if (action === "delete") {
     await supabase.from("prospects").delete().in("id", ids).eq("user_id", user.id);
   }
@@ -82,6 +84,27 @@ export async function markReplied(id: string) {
   const { supabase } = await ctx();
   await supabase.from("prospects").update({ status: "a_repondu", next_at: null, replied_at: new Date().toISOString() }).eq("id", id);
   revalidatePath(`/prospects/${id}`);
+}
+
+export async function createList(name: string) {
+  const { supabase, user } = await ctx();
+  const { data, error } = await supabase.from("lists").insert({ user_id: user.id, name: name.trim().slice(0, 120) }).select("id").single();
+  if (error) throw new Error(error.message);
+  revalidatePath("/prospects");
+  return data.id as string;
+}
+
+export async function renameList(id: string, name: string) {
+  const { supabase } = await ctx();
+  await supabase.from("lists").update({ name: name.trim().slice(0, 120) }).eq("id", id);
+  revalidatePath("/prospects");
+}
+
+export async function deleteList(id: string, withProspects: boolean) {
+  const { supabase } = await ctx();
+  if (withProspects) await supabase.from("prospects").delete().eq("list_id", id);
+  await supabase.from("lists").delete().eq("id", id);
+  revalidatePath("/prospects");
 }
 
 // ---------- Scénarios ----------

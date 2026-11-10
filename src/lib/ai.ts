@@ -69,6 +69,7 @@ function profileBlock(p: Partial<Prospect>) {
     p.about && `À propos : ${p.about}`,
     p.experience && `Expérience : ${p.experience}`,
     p.education && `Formation : ${p.education}`,
+    ...Object.entries(p.custom || {}).map(([k, v]) => `${k} : ${v}`),
   ]
     .filter(Boolean)
     .join("\n");

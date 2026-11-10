@@ -11,6 +11,7 @@ const NAV = [
   { href: "/prospects", label: "Prospects", icon: "●" },
   { href: "/scenarios", label: "Scénarios", icon: "➜" },
   { href: "/validate", label: "À valider", icon: "✓" },
+  { href: "/stats", label: "Statistiques", icon: "▲" },
   { href: "/assistant", label: "Assistant IA", icon: "✦" },
   { href: "/settings", label: "Réglages", icon: "⚙" },
 ];

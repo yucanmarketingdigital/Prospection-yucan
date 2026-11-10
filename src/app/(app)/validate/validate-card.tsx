@@ -5,7 +5,7 @@ import type { Prospect } from "@/lib/domain";
 import { Button, Card, Textarea } from "@/components/ui";
 import { approveMessage, regenerateMessage, skipStep, stopProspect } from "../actions";
 
-export function ValidateCard({ prospect: p }: { prospect: Prospect }) {
+export function ValidateCard({ prospect: p, files }: { prospect: Prospect; files: string[] }) {
   const [text, setText] = useState(p.pending_message?.text ?? "");
   const [pending, start] = useTransition();
   const [error, setError] = useState("");
@@ -23,7 +23,10 @@ export function ValidateCard({ prospect: p }: { prospect: Prospect }) {
       </div>
       {p.analysis?.angle_recommande && <p className="mt-2 text-sm text-muted">💡 {p.analysis.angle_recommande}</p>}
       <Textarea className="mt-3 min-h-36" value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="mt-1 text-right text-xs text-muted">{text.length} caractères</div>
+      <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-muted">
+        <span>{files.length > 0 && <>📎 Avec : {files.join(", ")}</>}</span>
+        <span>{text.length} caractères</span>
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         <Button disabled={pending || !text.trim()} onClick={() => start(() => approveMessage(p.id, text))}>Approuver</Button>

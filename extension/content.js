@@ -252,7 +252,38 @@
     }
   }
 
-  async function sendMessage({ text, fullName }) {
+  // Ajoute les fichiers au message via le champ « Joindre » de LinkedIn, puis attend la fin de l'envoi.
+  async function attachFiles(root, attachments) {
+    const files = attachments.map((a) => {
+      const bin = atob(a.data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new File([bytes], a.name, { type: a.type });
+    });
+    for (const file of files) {
+      const isImage = file.type.startsWith('image/');
+      const inputs = [...root.querySelectorAll('input[type="file"]'), ...document.querySelectorAll('.msg-form input[type="file"]')];
+      const input =
+        inputs.find((i) => (isImage ? /image/.test(i.accept || '') : !/^image\/\*$/.test(i.accept || ''))) || inputs[0];
+      if (!input) return "Bouton « Joindre un fichier » introuvable dans la conversation LinkedIn.";
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(rand(1500, 2500));
+    }
+    // Les vidéos et gros fichiers prennent plus de temps à être envoyés à LinkedIn.
+    const big = files.some((f) => f.size > 3 * 1024 * 1024 || f.type.startsWith('video/'));
+    const ready = await waitFor(() => {
+      const uploading = root.querySelector('[class*="progress"], [role="progressbar"]');
+      const b = root.querySelector('button.msg-form__send-button, button.msg-form__send-btn, button[type="submit"]');
+      return !uploading && b && !b.disabled;
+    }, big ? 90000 : 30000, 1000);
+    if (!ready) return "La pièce jointe n'a pas pu être chargée dans LinkedIn (format refusé ou fichier trop lourd).";
+    return null;
+  }
+
+  async function sendMessage({ text, fullName, attachments }) {
     const profile = await loadProfile();
     const btn = findButton(/^(envoyer un )?message\b/i, topCard());
     if (!btn) {
@@ -270,7 +301,14 @@
       await closeConversation(root);
       return { status: 'replied', profile };
     }
-    await insertText(box, text);
+    if (attachments?.length) {
+      const err = await attachFiles(root, attachments);
+      if (err) {
+        await closeConversation(root);
+        return { status: 'error', profile, error: err };
+      }
+    }
+    if (text) await insertText(box, text);
     await sleep(rand(800, 1600));
     const send = await waitFor(() => {
       const b = root.querySelector('button.msg-form__send-button, button.msg-form__send-btn, button[type="submit"]');
@@ -339,37 +377,98 @@
       return;
     }
     const campaigns = res.campaigns || [];
+    const lists = res.lists || [];
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const field = 'width:100%;padding:6px;margin-bottom:8px;border:0;border-radius:8px;color:#2a1033;box-sizing:border-box';
     panel = document.createElement('div');
     panel.dataset.kind = kind;
     panel.dataset.path = location.pathname;
     panel.style.cssText =
       'position:fixed;right:20px;bottom:20px;z-index:99999;background:linear-gradient(160deg,#e0197d,#5a0f78);border-radius:16px;padding:14px;box-shadow:0 8px 28px rgba(90,15,120,.35);font:14px system-ui,sans-serif;color:#fff;width:270px';
+    const defaultName = new URLSearchParams(location.search).get('keywords') || 'Recherche LinkedIn';
     panel.innerHTML = `
       <div style="margin-bottom:8px"><span style="font:500 18px Georgia,serif;letter-spacing:.08em">YUCAN</span> <span style="color:#ffd21f;font-weight:600;font-size:12px">Prospection</span></div>
-      <select style="width:100%;padding:6px;margin-bottom:8px;border:0;border-radius:8px;color:#2a1033">
-        <option value="">Sans scénario (à lancer plus tard)</option>
-        ${campaigns.map((c) => `<option value="${c.id}">${c.name.replace(/</g, '&lt;')}</option>`).join('')}
+      <select class="pia-list" style="${field}">
+        <option value="__new">+ Nouvelle liste</option>
+        ${lists.map((l) => `<option value="${l.id}">Liste : ${esc(l.name)}</option>`).join('')}
+        <option value="">Sans liste</option>
       </select>
+      <input class="pia-name" style="${field}" placeholder="Nom de la nouvelle liste" value="${esc(defaultName)}">
+      <select class="pia-campaign" style="${field}">
+        <option value="">Sans scénario (à lancer plus tard)</option>
+        ${campaigns.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+      </select>
+      ${
+        kind === 'search'
+          ? `<select class="pia-pages" style="${field}">
+              <option value="1">Cette page seulement</option>
+              <option value="3">3 pages (≈ 30 profils)</option>
+              <option value="5">5 pages (≈ 50 profils)</option>
+              <option value="10">10 pages (≈ 100 profils)</option>
+            </select>`
+          : ''
+      }
       <button style="width:100%;padding:9px;border:0;border-radius:8px;background:#ffd21f;color:#5a0f78;font-weight:700;cursor:pointer">
-        ${kind === 'search' ? 'Importer les résultats de cette page' : 'Ajouter ce profil'}
+        ${kind === 'search' ? 'Importer les résultats' : 'Ajouter ce profil'}
       </button>
       <div class="pia-msg" style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.85)"></div>`;
-    const [select, button, msg] = [panel.querySelector('select'), panel.querySelector('button'), panel.querySelector('.pia-msg')];
+    const $ = (sel) => panel.querySelector(sel);
+    const [listSel, nameInput, campSel, pagesSel, button, msg] = [$('.pia-list'), $('.pia-name'), $('.pia-campaign'), $('.pia-pages'), $('button'), $('.pia-msg')];
+    const syncName = () => (nameInput.style.display = listSel.value === '__new' ? '' : 'none');
+    listSel.addEventListener('change', syncName);
+    syncName();
     button.addEventListener('click', async () => {
-      let items;
-      if (kind === 'search') {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        await sleep(1200);
-        items = scrapeSearchResults();
-      } else {
-        items = [scrapeProfile()].filter((p) => p.fullName).map((p) => ({ ...p, url: location.href }));
+      button.disabled = true;
+      try {
+        let items = [];
+        if (kind === 'search') {
+          const pages = Number(pagesSel?.value || 1);
+          const seen = new Set();
+          for (let page = 1; page <= pages; page++) {
+            msg.textContent = `Lecture de la page ${page}/${pages}…`;
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            await sleep(1200 + Math.random() * 800);
+            for (const it of scrapeSearchResults()) {
+              if (seen.has(it.url)) continue;
+              seen.add(it.url);
+              items.push(it);
+            }
+            if (page === pages) break;
+            const next = findButton(/^(suivant|next)$/i);
+            if (!next || next.disabled) break;
+            const before = scrapeSearchResults()[0]?.url;
+            await humanClick(next);
+            await waitFor(() => scrapeSearchResults()[0]?.url !== before, 15000).catch(() => null);
+            await sleep(2000 + Math.random() * 2000); // rythme humain entre deux pages
+          }
+        } else {
+          items = [scrapeProfile()].filter((p) => p.fullName).map((p) => ({ ...p, url: location.href }));
+        }
+        if (!items.length) {
+          msg.textContent = 'Aucun profil trouvé sur cette page.';
+          return;
+        }
+        const isNew = listSel.value === '__new';
+        const res = await chrome.runtime.sendMessage({
+          type: 'importProspects',
+          items,
+          campaignId: campSel.value,
+          listId: isNew ? '' : listSel.value,
+          newListName: isNew ? nameInput.value.trim() || defaultName : '',
+        });
+        msg.textContent = res?.error ? `Erreur : ${res.error}` : `${res.added} ajouté(s), ${res.skipped} déjà présent(s).`;
+        if (!res?.error && isNew && res.listId) {
+          // La liste existe maintenant : on la sélectionne pour les imports suivants.
+          const opt = document.createElement('option');
+          opt.value = res.listId;
+          opt.textContent = `Liste : ${nameInput.value.trim() || defaultName}`;
+          listSel.insertBefore(opt, listSel.options[1]);
+          listSel.value = res.listId;
+          syncName();
+        }
+      } finally {
+        button.disabled = false;
       }
-      if (!items.length) {
-        msg.textContent = 'Aucun profil trouvé sur cette page.';
-        return;
-      }
-      const res = await chrome.runtime.sendMessage({ type: 'importProspects', items, campaignId: select.value });
-      msg.textContent = res?.error ? `Erreur : ${res.error}` : `${res.added} ajouté(s), ${res.skipped} déjà présent(s).`;
     });
     document.body.appendChild(panel);
   }

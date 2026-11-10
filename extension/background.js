@@ -46,7 +46,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       return campaignsCache.data;
     }
-    if (msg.type === 'importProspects') return api('/api/extension/import', { method: 'POST', body: { items: msg.items, campaignId: msg.campaignId } });
+    if (msg.type === 'importProspects') {
+      const res = await api('/api/extension/import', {
+        method: 'POST',
+        body: { items: msg.items, campaignId: msg.campaignId, listId: msg.listId, newListName: msg.newListName },
+      });
+      if (msg.newListName) campaignsCache = { t: 0, data: null }; // la nouvelle liste apparaîtra dans le panneau
+      return res;
+    }
     if (msg.type === 'ping') return api('/api/extension/ping');
     if (msg.type === 'setPaused') return api('/api/extension/ping', { method: 'POST', body: { paused: msg.paused } });
     if (msg.type === 'runNow') return tick({ force: true });
@@ -73,7 +80,9 @@ async function tick({ force = false } = {}) {
     await setStatus(`Action en cours (${action.command})…`);
     let result;
     try {
-      result = await runInTab(action.url, action.command, action.payload);
+      const payload = { ...action.payload };
+      if (payload.attachments?.length) payload.attachments = await downloadAttachments(payload.attachments);
+      result = await runInTab(action.url, action.command, payload);
       if (action.command === 'sendMessage' && result.status === 'sent') result.sentText = action.payload.text;
     } catch (e) {
       result = { status: 'error', error: e.message, fatal: !!e.fatal };
@@ -85,6 +94,21 @@ async function tick({ force = false } = {}) {
   } finally {
     running = false;
   }
+}
+
+// Télécharge les pièces jointes (liens temporaires fournis par l'application) en base64
+// pour pouvoir les transmettre à la page LinkedIn.
+async function downloadAttachments(list) {
+  const out = [];
+  for (const a of list) {
+    const res = await fetch(a.url);
+    if (!res.ok) throw new Error(`Téléchargement impossible : ${a.name}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    out.push({ name: a.name, type: a.type || res.headers.get('content-type') || 'application/octet-stream', data: btoa(bin) });
+  }
+  return out;
 }
 
 function waitForTabComplete(tabId, timeout = 45000) {
