@@ -9,6 +9,7 @@ import { signOut, toggleEngine } from "@/app/(app)/actions";
 const NAV = [
   { href: "/", label: "Tableau de bord", icon: "◆" },
   { href: "/prospects", label: "Prospects", icon: "●" },
+  { href: "/lists", label: "Listes", icon: "☰" },
   { href: "/scenarios", label: "Scénarios", icon: "➜" },
   { href: "/validate", label: "À valider", icon: "✓" },
   { href: "/stats", label: "Statistiques", icon: "▲" },

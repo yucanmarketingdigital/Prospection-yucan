@@ -98,6 +98,33 @@ export async function renameList(id: string, name: string) {
   const { supabase } = await ctx();
   await supabase.from("lists").update({ name: name.trim().slice(0, 120) }).eq("id", id);
   revalidatePath("/prospects");
+  revalidatePath("/lists");
+}
+
+// Lance un scénario pour tous les prospects d'une liste qui ne sont pas déjà en cours.
+export async function startListCampaign(listId: string, campaignId: string) {
+  const { supabase, user } = await ctx();
+  const { data: c } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
+  if (!c) throw new Error("Scénario introuvable.");
+  const { data: ps } = await supabase.from("prospects").select("id,status").eq("list_id", listId).eq("user_id", user.id);
+  const busy = new Set(["actif", "a_valider", "a_repondu"]);
+  const ids = (ps || []).filter((p) => !busy.has(p.status)).map((p) => p.id as string);
+  for (let i = 0; i < ids.length; i += 200)
+    await supabase.from("prospects").update(startPosition(c as Campaign)).in("id", ids.slice(i, i + 200));
+  if (ids.length) await log(`Scénario « ${c.name} » lancé pour ${ids.length} prospect(s) d'une liste.`);
+  revalidatePath("/lists");
+  revalidatePath("/prospects");
+  return { started: ids.length, skipped: (ps?.length || 0) - ids.length };
+}
+
+export async function exportList(listId: string) {
+  const { supabase } = await ctx();
+  const { data } = await supabase
+    .from("prospects")
+    .select("first_name,last_name,headline,company,location,url,status,custom,analysis")
+    .eq("list_id", listId)
+    .order("created_at");
+  return (data || []) as Pick<Prospect, "first_name" | "last_name" | "headline" | "company" | "location" | "url" | "status" | "custom" | "analysis">[];
 }
 
 export async function deleteList(id: string, withProspects: boolean) {
@@ -105,6 +132,7 @@ export async function deleteList(id: string, withProspects: boolean) {
   if (withProspects) await supabase.from("prospects").delete().eq("list_id", id);
   await supabase.from("lists").delete().eq("id", id);
   revalidatePath("/prospects");
+  revalidatePath("/lists");
 }
 
 // ---------- Scénarios ----------

@@ -68,12 +68,13 @@ async function readFileRows(file: File): Promise<string[][]> {
   return parseCsv(await file.text());
 }
 
-export function ProspectsView({ prospects, campaigns, lists }: { prospects: Prospect[]; campaigns: Campaign[]; lists: ProspectList[] }) {
+export function ProspectsView({ prospects, campaigns, lists, initialList = "" }: { prospects: Prospect[]; campaigns: Campaign[]; lists: ProspectList[]; initialList?: string }) {
+  const startList = lists.some((l) => l.id === initialList) ? initialList : "";
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [campaign, setCampaign] = useState("");
-  const [listFilter, setListFilter] = useState("");
-  const [importList, setImportList] = useState("__new");
+  const [listFilter, setListFilter] = useState(startList);
+  const [importList, setImportList] = useState(startList || "__new");
   const [newListName, setNewListName] = useState("");
   const [bulkList, setBulkList] = useState(lists[0]?.id ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());

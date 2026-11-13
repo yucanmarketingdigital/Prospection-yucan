@@ -35,9 +35,13 @@ export type Analysis = {
   points_accroche?: string[];
   besoins_probables?: string[];
   angle_recommande?: string;
+  accroche?: string; // une phrase prête à l'emploi, basée sur un élément précis du profil
+  sujet_dernier_post?: string; // « votre post sur … »
   a_eviter?: string;
   date?: string;
 };
+
+export type RecentPost = { date: string; text: string; repost?: boolean };
 
 export type Prospect = {
   id: string;
@@ -52,6 +56,8 @@ export type Prospect = {
   about: string;
   experience: string;
   education: string;
+  current_position: string;
+  recent_posts: RecentPost[];
   status: ProspectStatus;
   campaign_id: string | null;
   list_id: string | null;
@@ -139,7 +145,22 @@ export const VARIABLES = [
   { key: "entreprise", label: "Entreprise" },
   { key: "poste", label: "Poste" },
   { key: "ville", label: "Ville" },
+  { key: "dernierpost", label: "Dernier post", hint: "Ex. « votre post sur le recrutement des commerciaux » (après la visite du profil)" },
+  { key: "accroche", label: "Accroche IA", hint: "Une phrase personnalisée écrite par l'IA à partir du profil et des posts" },
 ] as const;
+
+// Sujet du dernier post : l'analyse IA en donne une version propre, sinon on prend le début du texte.
+export function lastPostLabel(p: Partial<Prospect>) {
+  if (p.analysis?.sujet_dernier_post) return p.analysis.sujet_dernier_post;
+  const post = (p.recent_posts || []).find((x) => !x.repost) || p.recent_posts?.[0];
+  if (!post?.text) return "";
+  const t = post.text.replace(/\s+/g, " ").trim();
+  return `votre post « ${t.length > 90 ? t.slice(0, 90).replace(/\s+\S*$/, "") + "…" : t} »`;
+}
+
+export function needsAnalysis(tpl?: string) {
+  return /\{\{\s*(accroche|dernierpost)\s*\}\}/i.test(tpl || "");
+}
 
 // Transforme un en-tête de colonne CSV en nom de variable : « Ice breaker » → icebreaker
 export function variableKey(label: string) {
@@ -155,6 +176,8 @@ export function fillTemplate(tpl: string | undefined, p: Partial<Prospect>): str
     poste: p.headline,
     entreprise: p.company,
     ville: p.location,
+    dernierpost: lastPostLabel(p),
+    accroche: p.analysis?.accroche,
   };
   return String(tpl || "").replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_, k: string) => vars[variableKey(k)] ?? "");
 }

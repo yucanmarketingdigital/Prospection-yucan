@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { STEP_LABELS, fillTemplate, type Campaign, type Prospect, type Step, type StepType } from "@/lib/domain";
 import { TemplateField } from "@/components/template-field";
 import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
+import { DictateButton, joinText } from "@/components/voice";
 import { AttachmentPicker } from "@/components/attachment-picker";
 import { saveCampaign, suggestScenario } from "../../actions";
 
@@ -148,6 +149,7 @@ function StepFields({ step: s, onChange, vars }: { step: Step; onChange: (p: Par
           <>
             <Label>Consigne pour l&apos;IA</Label>
             <Textarea value={s.aiInstruction ?? ""} onChange={(e) => onChange({ aiInstruction: e.target.value })} placeholder="Ex. : mentionne un point commun et explique pourquoi je souhaite me connecter." />
+            <div className="mt-1"><DictateButton onText={(t) => onChange({ aiInstruction: joinText(s.aiInstruction ?? "", t) })} /></div>
           </>
         )}
       </>
@@ -169,6 +171,7 @@ function StepFields({ step: s, onChange, vars }: { step: Step; onChange: (p: Par
         <>
           <Label>Consigne pour l&apos;IA</Label>
           <Textarea value={s.aiInstruction ?? ""} onChange={(e) => onChange({ aiInstruction: e.target.value })} placeholder="Ex. : remercie pour la connexion, rebondis sur son poste actuel et pose une question ouverte." />
+            <div className="mt-1"><DictateButton onText={(t) => onChange({ aiInstruction: joinText(s.aiInstruction ?? "", t) })} /></div>
         </>
       )}
       <AttachmentPicker value={s.attachments ?? []} onChange={(attachments) => onChange({ attachments })} />

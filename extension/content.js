@@ -88,6 +88,40 @@
     return parts[1] ? norm(parts[1]) : '';
   }
 
+  // Poste actuel : première ligne de la section Expérience (intitulé · entreprise · dates).
+  function currentPosition() {
+    const sec = document.getElementById('experience')?.closest('section');
+    const li = sec?.querySelector('li');
+    if (!li) return '';
+    const parts = [];
+    for (const s of li.querySelectorAll('span[aria-hidden="true"]')) {
+      const t = norm(s.innerText);
+      if (t && !parts.includes(t)) parts.push(t);
+    }
+    return parts.slice(0, 3).join(' · ').slice(0, 300);
+  }
+
+  // Derniers posts, lus sur la page « Activité > Posts » du profil.
+  async function scrapePosts() {
+    const SEL = '.feed-shared-update-v2, div[data-urn*="urn:li:activity"]';
+    await waitFor(() => document.querySelector(SEL), 15000);
+    await humanScroll();
+    const posts = [];
+    for (const el of document.querySelectorAll(SEL)) {
+      if (posts.length >= 3) break;
+      const text = norm(el.querySelector('.update-components-text, .feed-shared-inline-show-more-text, .feed-shared-text')?.innerText)
+        .replace(/…\s*(voir plus|plus|see more|more)$/i, '')
+        .trim();
+      if (!text || posts.some((p) => p.text === text.slice(0, 1500))) continue;
+      const header = norm(el.querySelector('.update-components-header__text-view, .update-components-header')?.innerText);
+      const date = norm(el.querySelector('.update-components-actor__sub-description, .feed-shared-actor__sub-description')?.innerText)
+        .split('•')[0]
+        .trim();
+      posts.push({ date, text: text.slice(0, 1500), repost: /republi|repost/i.test(header) });
+    }
+    return { posts };
+  }
+
   function scrapeProfile() {
     const card = topCard();
     const fullName = norm(document.querySelector('main h1')?.innerText);
@@ -97,13 +131,15 @@
     const about = sectionText('about', 2000);
     const experience = sectionText('experience', 2500);
     const education = sectionText('education', 800);
+    const position = currentPosition();
     const connected = /\b1(st|er)?\b/i.test(degree) && !/2|3/.test(degree);
     return {
       fullName,
       firstName: fullName.split(' ')[0] || '',
       lastName: fullName.split(' ').slice(1).join(' '),
       headline,
-      company: guessCompany(headline, experience),
+      company: guessCompany(headline, experience) || norm(position.split(' · ')[1] || ''),
+      currentPosition: position,
       location: place,
       about,
       experience,
@@ -322,7 +358,7 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    const handlers = { scrapeProfile: async () => ({ profile: await loadProfile() }), connect, checkConnection, sendMessage };
+    const handlers = { scrapeProfile: async () => ({ profile: await loadProfile() }), scrapePosts, connect, checkConnection, sendMessage };
     const fn = handlers[msg.command];
     if (!fn) return false;
     fn(msg.payload || {})

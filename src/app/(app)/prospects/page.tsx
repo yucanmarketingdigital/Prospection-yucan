@@ -3,7 +3,8 @@ import type { Campaign, Prospect, ProspectList } from "@/lib/domain";
 import { PageTitle } from "@/components/ui";
 import { ProspectsView } from "./prospects-view";
 
-export default async function ProspectsPage() {
+export default async function ProspectsPage({ searchParams }: PageProps<"/prospects">) {
+  const { list } = await searchParams;
   const supabase = await createClient();
   const [{ data: prospects }, { data: campaigns }, { data: lists }] = await Promise.all([
     supabase
@@ -17,7 +18,7 @@ export default async function ProspectsPage() {
   return (
     <>
       <PageTitle title="Prospects" subtitle="Importez, filtrez et lancez vos scénarios." />
-      <ProspectsView prospects={(prospects || []) as Prospect[]} campaigns={(campaigns || []) as Campaign[]} lists={(lists || []) as ProspectList[]} />
+      <ProspectsView prospects={(prospects || []) as Prospect[]} campaigns={(campaigns || []) as Campaign[]} lists={(lists || []) as ProspectList[]} initialList={typeof list === "string" ? list : ""} />
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button, Card, PageTitle, Textarea } from "@/components/ui";
+import { DictateButton, joinText } from "@/components/voice";
 import { askAssistant } from "../actions";
 
 const SUGGESTIONS = [
@@ -26,7 +27,8 @@ export default function AssistantPage() {
             </button>
           ))}
         </div>
-        <Textarea className="mt-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Votre question…" />
+        <Textarea className="mt-4" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Votre question… ou cliquez sur Dicter" />
+        <div className="mt-1"><DictateButton onText={(t) => setQ((prev) => joinText(prev, t))} /></div>
         <Button
           className="mt-3"
           disabled={pending || !q.trim()}

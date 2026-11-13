@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "./supabase/admin";
 import { analyzeProfile, generateMessage, hasAIKey } from "./ai";
-import { DAY_MS, fillTemplate, localNow, nextPosition, type Campaign, type Prospect, type Settings, type Step } from "./domain";
+import { DAY_MS, fillTemplate, localNow, lastPostLabel, needsAnalysis, nextPosition, type Campaign, type Prospect, type RecentPost, type Settings, type Step } from "./domain";
 
 // Le moteur de prospection vit côté serveur. L'extension Chrome lui demande
 // « quelle est la prochaine action ? », l'exécute dans LinkedIn, puis renvoie le résultat.
@@ -111,6 +111,12 @@ export async function nextAction(
     let payload: Record<string, unknown> = {};
     let command: Command;
     try {
+      // Les variables {{accroche}} et {{dernierpost}} ont besoin de l'analyse IA du profil.
+      if (!p.analysis && needsAnalysis(step.template) && hasAIKey(settings)) {
+        const analysis = await analyzeProfile(settings, p);
+        await db.from("prospects").update({ analysis }).eq("id", p.id);
+        p.analysis = analysis;
+      }
       if (step.type === "visit") command = "scrapeProfile";
       else if (step.type === "wait_accept") command = "checkConnection";
       else if (step.type === "invite") {
@@ -124,7 +130,12 @@ export async function nextAction(
         let text = p.approved_message && p.approved_message.stepIndex === p.step_index ? p.approved_message.text : null;
         if (!text) {
           text = step.mode === "ia" ? await generateMessage(settings, p, { instruction: step.aiInstruction }) : fillTemplate(step.template, p);
-          if (step.approval) {
+          // Variable vide (pas de post lu, pas d'accroche) : on demande une relecture plutôt que d'envoyer un message bancal.
+          const missingVar =
+            step.mode !== "ia" &&
+            ((/\{\{\s*dernierpost\s*\}\}/i.test(step.template || "") && !lastPostLabel(p)) ||
+              (/\{\{\s*accroche\s*\}\}/i.test(step.template || "") && !p.analysis?.accroche));
+          if (step.approval || missingVar) {
             await db
               .from("prospects")
               .update({ status: "a_valider", pending_message: { text, stepIndex: p.step_index } })
@@ -186,6 +197,8 @@ type ScrapedProfile = Partial<{
   about: string;
   experience: string;
   education: string;
+  currentPosition: string;
+  posts: RecentPost[];
 }>;
 
 export type ActionResult = {
@@ -209,8 +222,15 @@ function profileColumns(profile?: ScrapedProfile) {
     about: profile.about,
     experience: profile.experience,
     education: profile.education,
+    current_position: profile.currentPosition,
   };
-  return Object.fromEntries(Object.entries(map).filter(([, v]) => v));
+  const cols: Record<string, unknown> = Object.fromEntries(Object.entries(map).filter(([, v]) => v));
+  if (Array.isArray(profile.posts) && profile.posts.length)
+    cols.recent_posts = profile.posts
+      .slice(0, 3)
+      .map((x) => ({ date: String(x.date || "").slice(0, 40), text: String(x.text || "").slice(0, 1500), repost: !!x.repost }))
+      .filter((x) => x.text);
+  return cols;
 }
 
 export async function reportResult(
@@ -257,10 +277,11 @@ export async function reportResult(
     await count("visits");
     await log(db, userId, `Profil visité : ${who()}`);
     let analysis = p.analysis;
-    if (settings.auto_analyze && hasAIKey(settings) && !analysis) {
+    // Nouvelle analyse après chaque visite : elle tient compte des derniers posts lus.
+    if (settings.auto_analyze && hasAIKey(settings) && (!analysis || result.profile?.posts?.length)) {
       try {
         analysis = await analyzeProfile(settings, p);
-        await log(db, userId, `Profil analysé par l'IA : ${who()} (note ${analysis.score}/10)`);
+        await log(db, userId, `Profil analysé par l'IA : ${who()} (note ${analysis.score}/10)${analysis.accroche ? ` · accroche : ${analysis.accroche}` : ""}`);
       } catch (e) {
         await log(db, userId, `Analyse IA impossible pour ${who()} : ${(e as Error).message}`, "warn");
       }

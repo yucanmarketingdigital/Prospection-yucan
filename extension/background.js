@@ -131,6 +131,20 @@ function waitForTabComplete(tabId, timeout = 45000) {
   });
 }
 
+async function askTab(tabId, command, payload) {
+  let lastErr;
+  for (let i = 0; i < 5; i++) {
+    try {
+      const res = await chrome.tabs.sendMessage(tabId, { command, payload });
+      if (res) return res;
+    } catch (e) {
+      lastErr = e;
+    }
+    await sleep(1500);
+  }
+  throw new Error(`Page LinkedIn injoignable${lastErr ? ` (${lastErr.message})` : ''}.`);
+}
+
 async function runInTab(url, command, payload = {}) {
   const tab = await chrome.tabs.create({ url, active: false });
   try {
@@ -143,17 +157,22 @@ async function runInTab(url, command, payload = {}) {
       throw err;
     }
     await sleep(rand(3000, 6000));
-    let lastErr;
-    for (let i = 0; i < 5; i++) {
+    const res = await askTab(tab.id, command, payload);
+    // Après la visite du profil, on lit aussi ses derniers posts (onglet Activité).
+    if (command === 'scrapeProfile' && res.profile) {
       try {
-        const res = await chrome.tabs.sendMessage(tab.id, { command, payload });
-        if (res) return res;
-      } catch (e) {
-        lastErr = e;
+        const base = (res.profile.url || url).replace(/\/?$/, '/');
+        await chrome.tabs.update(tab.id, { url: `${base}recent-activity/shares/` });
+        await sleep(800);
+        await waitForTabComplete(tab.id);
+        await sleep(rand(2500, 4500));
+        const r = await askTab(tab.id, 'scrapePosts', {});
+        if (Array.isArray(r?.posts)) res.profile.posts = r.posts;
+      } catch {
+        /* pas de posts lisibles : on garde le reste du profil */
       }
-      await sleep(1500);
     }
-    throw new Error(`Page LinkedIn injoignable${lastErr ? ` (${lastErr.message})` : ''}.`);
+    return res;
   } finally {
     await sleep(rand(1000, 3000));
     chrome.tabs.remove(tab.id).catch(() => {});

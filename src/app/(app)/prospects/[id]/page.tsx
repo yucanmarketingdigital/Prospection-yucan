@@ -53,6 +53,9 @@ export default async function ProspectPage(props: PageProps<"/prospects/[id]">) 
                 <b>Besoins probables</b>
                 <ul className="ml-5 list-disc">{a.besoins_probables?.map((x) => <li key={x}>{x}</li>)}</ul>
               </div>
+              {a.accroche && (
+                <p className="rounded-xl bg-yellow/25 px-3 py-2 sm:col-span-2"><b>Accroche :</b> {a.accroche}</p>
+              )}
               <p><b>Angle recommandé :</b> {a.angle_recommande}</p>
               <p><b>À éviter :</b> {a.a_eviter}</p>
             </div>
@@ -60,11 +63,25 @@ export default async function ProspectPage(props: PageProps<"/prospects/[id]">) 
             <p className="mt-2 text-sm text-muted">Pas encore analysé. L&apos;analyse se lance automatiquement après la visite du profil, ou avec le bouton ci-dessus.</p>
           )}
         </Card>
-        {(p.about || p.experience) && (
+        {(p.about || p.experience || p.current_position) && (
           <Card className="lg:col-span-3">
             <h2 className="font-semibold text-violet">Profil LinkedIn</h2>
+            {p.current_position && <p className="mt-2 text-sm"><b>Poste actuel :</b> {p.current_position}</p>}
             {p.about && <p className="mt-2 text-sm"><b>À propos :</b> {p.about}</p>}
             {p.experience && <p className="mt-2 text-sm"><b>Expérience :</b> {p.experience}</p>}
+          </Card>
+        )}
+        {p.recent_posts?.length > 0 && (
+          <Card className="lg:col-span-3">
+            <h2 className="font-semibold text-violet">Derniers posts</h2>
+            <div className="mt-2 space-y-3">
+              {p.recent_posts.map((x, i) => (
+                <div key={i} className="rounded-xl border border-line bg-surface p-3 text-sm">
+                  <div className="mb-1 text-xs text-muted">{x.repost ? "Republication" : "Post"}{x.date ? ` · ${x.date}` : ""}</div>
+                  <p className="line-clamp-4 whitespace-pre-wrap">{x.text}</p>
+                </div>
+              ))}
+            </div>
           </Card>
         )}
         <Card className="lg:col-span-3">

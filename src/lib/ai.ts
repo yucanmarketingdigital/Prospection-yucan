@@ -69,6 +69,10 @@ function profileBlock(p: Partial<Prospect>) {
     p.about && `À propos : ${p.about}`,
     p.experience && `Expérience : ${p.experience}`,
     p.education && `Formation : ${p.education}`,
+    p.current_position && `Poste actuel : ${p.current_position}`,
+    ...(p.recent_posts || []).map(
+      (x, i) => `${x.repost ? "Republication" : "Post"} récent ${i + 1}${x.date ? ` (publié : ${x.date})` : ""} : ${x.text.slice(0, 900)}`
+    ),
     ...Object.entries(p.custom || {}).map(([k, v]) => `${k} : ${v}`),
   ]
     .filter(Boolean)
@@ -96,8 +100,12 @@ Réponds uniquement avec un objet JSON valide, sans texte autour, de cette forme
   "points_accroche": ["éléments précis du profil utilisables pour personnaliser un message"],
   "besoins_probables": ["besoins ou problèmes probables en lien avec l'offre"],
   "angle_recommande": "l'angle d'approche le plus pertinent",
-  "a_eviter": "ce qu'il vaut mieux ne pas dire à cette personne"
-}`;
+  "a_eviter": "ce qu'il vaut mieux ne pas dire à cette personne",
+  "accroche": "UNE phrase d'accroche naturelle, adressée à la personne (vouvoiement), qui cite un élément précis et vérifiable : de préférence un post récent écrit par la personne, sinon son poste actuel ou son entreprise. Pas de flatterie, pas de question commerciale.",
+  "sujet_dernier_post": "si un post récent écrit par la personne existe : un groupe nominal commençant par « votre post sur … » (12 mots max), sinon chaîne vide"
+}
+
+N'utilise que les informations ci-dessus. Une republication n'est pas un post écrit par la personne.`;
   const text = await callAI(settings, baseSystem(settings), prompt);
   return { ...parseJson<Analysis>(text), date: new Date().toISOString() };
 }
@@ -109,6 +117,7 @@ export async function generateMessage(
 ) {
   const history = (p.sent_messages || []).map((m, i) => `Message ${i + 1} déjà envoyé : ${m.text}`).join("\n");
   const analysis = p.analysis ? `Analyse du profil :\n${JSON.stringify(p.analysis, null, 1)}` : "Pas d'analyse disponible : appuie-toi sur le profil.";
+  const hasPosts = (p.recent_posts || []).some((x) => !x.repost);
   const rules =
     kind === "invitation"
       ? "C'est une note d'invitation LinkedIn : 280 caractères maximum, espaces compris."
@@ -124,6 +133,7 @@ Consigne pour ce message : ${instruction || "Message de prise de contact personn
 Règles :
 - ${rules}
 - Commence par saluer la personne par son prénom (${p.first_name || ""}).
+- Personnalise vraiment : cite le nom de son entreprise${p.company ? ` (${p.company})` : ""} ou son poste actuel, et un élément précis${hasPosts ? " — de préférence le sujet de son dernier post, avec un détail concret de ce qu'elle y dit (sans le recopier)" : ""}.${p.analysis?.accroche ? `\n- Tu peux t'inspirer de cette accroche : ${p.analysis.accroche}` : ""}
 - Écris comme un humain, phrases simples, aucune formule creuse ni flatterie excessive.
 - Ne répète pas les messages déjà envoyés.
 - N'invente aucun fait absent du profil.

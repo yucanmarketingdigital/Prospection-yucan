@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_BYTES, type Attachment } from "@/lib/domain";
+import { AudioRecorder } from "./voice";
 
 const ICON: Record<string, string> = { image: "🖼", video: "🎬", audio: "🎙", application: "📄" };
 const sizeLabel = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} Mo` : `${Math.ceil(n / 1024)} Ko`);
@@ -11,8 +12,9 @@ export function AttachmentPicker({ value, onChange }: { value: Attachment[]; onC
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [recording, setRecording] = useState(false);
 
-  const upload = async (files: FileList | null) => {
+  const upload = async (files: FileList | File[] | null) => {
     if (!files?.length) return;
     setError("");
     setBusy(true);
@@ -62,8 +64,27 @@ export function AttachmentPicker({ value, onChange }: { value: Attachment[]; onC
         >
           {busy ? "Envoi…" : "+ Ajouter un fichier"}
         </button>
+        {!recording && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setRecording(true)}
+            className="rounded-xl border border-dashed border-magenta/50 px-3 py-1.5 text-sm text-magenta hover:bg-magenta/5 disabled:opacity-50 cursor-pointer"
+          >
+            🎙 Enregistrer un audio
+          </button>
+        )}
         <input ref={input} type="file" multiple accept={ATTACHMENT_ACCEPT} hidden onChange={(e) => upload(e.target.files)} />
       </div>
+      {recording && (
+        <AudioRecorder
+          onCancel={() => setRecording(false)}
+          onFile={async (f) => {
+            setRecording(false);
+            await upload([f]);
+          }}
+        />
+      )}
       {value.some((a) => a.type.startsWith("audio/")) && (
         <p className="mt-2 text-xs text-muted">
           LinkedIn ne permet d&apos;enregistrer un vrai message vocal que depuis l&apos;application mobile. Ici, l&apos;audio part comme un fichier à écouter. Pour un rendu plus naturel, une courte vidéo fonctionne souvent mieux.
