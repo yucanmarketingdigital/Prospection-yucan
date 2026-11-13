@@ -65,6 +65,11 @@ export async function importProspects(
     });
   }
   if (!rows.length) return { added: 0, skipped: items.length, listId };
+  // Anciennes adresses enregistrées en minuscules : on rétablit la bonne casse des identifiants ACoAA….
+  for (const r of rows) {
+    if (r.url !== r.url.toLowerCase())
+      await db.from("prospects").update({ url: r.url }).eq("user_id", userId).eq("url", r.url.toLowerCase());
+  }
   const { data, error } = await db.from("prospects").upsert(rows, { onConflict: "user_id,url", ignoreDuplicates: true }).select("id");
   if (error) throw new Error(error.message);
   // Les prospects déjà présents sans liste rejoignent aussi la liste choisie.

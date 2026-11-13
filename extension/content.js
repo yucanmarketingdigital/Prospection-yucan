@@ -27,7 +27,10 @@
 
   function normalizeUrl(u) {
     const m = String(u || '').match(/linkedin\.com\/in\/([^/?#\s]+)/i);
-    return m ? `https://www.linkedin.com/in/${m[1].toLowerCase()}/` : null;
+    if (!m) return null;
+    // Les identifiants internes (ACoAA…) sont sensibles à la casse ; les adresses personnalisées non.
+    const slug = /^(aco|aem)[a-z0-9_-]{15,}$/i.test(m[1]) ? m[1] : m[1].toLowerCase();
+    return `https://www.linkedin.com/in/${slug}/`;
   }
 
   function isVisible(el) {
@@ -64,9 +67,43 @@
 
   // ---------- Lecture du profil ----------
 
+  // Nom du profil : <h1> si présent, sinon titre de l'onglet (« Prénom Nom | LinkedIn »).
+  // LinkedIn change régulièrement sa mise en page, on ne dépend donc d'aucune classe CSS.
+  function nameHeading() {
+    const h = document.querySelector('main h1') || document.querySelector('h1');
+    if (h && norm(h.innerText)) return h;
+    const fromTitle = titleName();
+    if (!fromTitle) return null;
+    return [...document.querySelectorAll('h1, h2, h3')].find((x) => norm(x.innerText) === fromTitle) || null;
+  }
+
+  function titleName() {
+    if (!/^\/in\//.test(location.pathname)) return '';
+    const t = norm(document.title.replace(/^\(\d+\+?\)\s*/, '').split(/\s+[|–-]\s+/)[0]);
+    return t && !/^linkedin$/i.test(t) ? t : '';
+  }
+
+  function profileName() {
+    return norm(nameHeading()?.innerText) || titleName();
+  }
+
   function topCard() {
-    const h1 = document.querySelector('main h1');
-    return (h1 && h1.closest('section')) || document.querySelector('main section') || document.body;
+    const h = nameHeading();
+    if (h) {
+      // Remonte jusqu'au bloc qui contient aussi les boutons d'action (Se connecter / Message / Plus).
+      let el = h.closest('section') || h.parentElement;
+      for (let x = h.parentElement; x && x !== document.body; x = x.parentElement) {
+        if (x.querySelector('button')) { el = x.closest('section') || x; break; }
+      }
+      return el;
+    }
+    return document.querySelector('main section') || document.querySelector('main') || document.body;
+  }
+
+  function cardLines(card, name) {
+    return String(card.innerText || '').split('\n').map(norm).filter(Boolean)
+      .filter((l) => l !== name && !/^[•·\s]*(1er|2e|3e( et \+)?|1st|2nd|3rd\+?)$/i.test(l))
+      .filter((l) => !/^(se connecter|connect|message|suivre|follow|plus|more|en attente|pending|coordonnées|contact info|\d[\d\s]* (relations|abonnés|connections|followers).*)$/i.test(l));
   }
 
   function sectionText(id, max) {
@@ -124,10 +161,13 @@
 
   function scrapeProfile() {
     const card = topCard();
-    const fullName = norm(document.querySelector('main h1')?.innerText);
-    const headline = norm(card.querySelector('.text-body-medium')?.innerText);
-    const place = norm(card.querySelector('.text-body-small.inline.t-black--light, span.text-body-small.t-black--light')?.innerText);
-    const degree = norm(card.querySelector('.dist-value')?.innerText || '');
+    const fullName = profileName();
+    const lines = cardLines(card, fullName);
+    const headline = norm(card.querySelector('.text-body-medium')?.innerText) || lines[0] || '';
+    const place = norm(card.querySelector('.text-body-small.inline.t-black--light, span.text-body-small.t-black--light')?.innerText)
+      || lines.find((l) => l !== headline && /,|région|area|france|périphérie|ile-de-france|île-de-france/i.test(l)) || '';
+    const degreeMatch = String(card.innerText || '').match(/(?:^|\s|·|•)(1er|1st|2e|2nd|3e|3rd)\b/i);
+    const degree = norm(card.querySelector('.dist-value')?.innerText || (degreeMatch ? degreeMatch[1] : ''));
     const about = sectionText('about', 2000);
     const experience = sectionText('experience', 2500);
     const education = sectionText('education', 800);
@@ -151,8 +191,11 @@
   }
 
   async function loadProfile() {
-    const h1 = await waitFor(() => document.querySelector('main h1'), 20000);
-    if (!h1) throw new Error("Profil introuvable sur la page (page non chargée ou profil inaccessible).");
+    if (/authwall|\/login|\/checkpoint|\/uas\//.test(location.href)) {
+      throw new Error("LinkedIn n'est pas connecté dans ce Chrome (page de connexion affichée). Connectez-vous à LinkedIn puis relancez.");
+    }
+    const ok = await waitFor(() => profileName(), 25000);
+    if (!ok) throw new Error(`Profil introuvable sur la page (page non chargée ou profil inaccessible). Page : ${location.pathname}`);
     await sleep(rand(1500, 3000));
     await humanScroll();
     return scrapeProfile();

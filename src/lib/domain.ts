@@ -135,7 +135,10 @@ export const CLAUDE_MODELS = [
 
 export function normalizeUrl(u: string): string | null {
   const m = String(u || "").match(/linkedin\.com\/in\/([^/?#\s]+)/i);
-  return m ? `https://www.linkedin.com/in/${m[1].toLowerCase()}/` : null;
+  if (!m) return null;
+  // Les identifiants internes (ACoAA…) sont sensibles à la casse ; les adresses personnalisées non.
+  const slug = /^(aco|aem)[a-z0-9_-]{15,}$/i.test(m[1]) ? m[1] : m[1].toLowerCase();
+  return `https://www.linkedin.com/in/${slug}/`;
 }
 
 export const VARIABLES = [
