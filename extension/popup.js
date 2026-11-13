@@ -6,7 +6,7 @@ async function show() {
   if (!appUrl || !token) {
     $('setup').hidden = false;
     $('connected').hidden = true;
-    $('appUrl').value = appUrl || '';
+    $('appUrl').value = appUrl || 'https://prospection-yucan.vercel.app';
     return;
   }
   $('setup').hidden = true;
