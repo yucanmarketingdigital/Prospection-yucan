@@ -369,21 +369,63 @@
 
   // ---------- Bouton d'import ----------
 
+  // Lecture des résultats de recherche, indépendante des classes CSS de LinkedIn
+  // (qui changent souvent) : on part des liens /in/ et on remonte à la carte du résultat.
+  const DEGREE_RE = /^[•·\s]*(1er|2e|3e( et \+)?|1st|2nd|3rd\+?|\d+(e|er|st|nd|rd|th)\+?)$/i;
+  const NOISE_RE = /^(se connecter|connect|message|suivre|follow|en attente|pending|voir le profil.*|view .*profile|statut.*|•)$/i;
+
+  function cleanName(t) {
+    return norm(String(t || '')
+      .split('\n')[0]
+      .replace(/^voir le profil de\s+/i, '')
+      .replace(/^view\s+/i, '').replace(/[’']s profile$/i, '')
+      .replace(/\s*[•·]\s*(1er|2e|3e.*|1st|2nd|3rd.*)$/i, ''));
+  }
+
+  // Lien « texte » vers un profil (le nom), hors mentions de relations en commun.
+  function isNameLink(a) {
+    if (!normalizeUrl(a.href)) return false;
+    if (!norm(a.innerText || a.getAttribute('aria-label'))) return false;
+    const around = norm(a.parentElement?.innerText || '');
+    return !/en commun|in common/i.test(around);
+  }
+
+  function cardFor(a) {
+    const url = normalizeUrl(a.href);
+    let card = a;
+    // On remonte tant que le parent ne contient pas le nom d'un autre résultat.
+    for (let el = a.parentElement; el && el !== document.body; el = el.parentElement) {
+      if (el.matches('ul, ol, [role="list"], main, nav, header, aside')) break;
+      const other = [...el.querySelectorAll('a[href*="/in/"]')].some((x) => normalizeUrl(x.href) !== url && isNameLink(x));
+      if (other) break;
+      card = el;
+      if (el.matches('li, [role="listitem"], [data-chameleon-result-urn]')) break;
+    }
+    return card;
+  }
+
   function scrapeSearchResults() {
     const out = [];
     const seen = new Set();
-    for (const li of document.querySelectorAll('main li, main [data-chameleon-result-urn]')) {
-      const link = [...li.querySelectorAll('a[href*="/in/"]')].find((a) => norm(a.querySelector('span[aria-hidden="true"]')?.innerText || ''));
-      if (!link) continue;
-      const url = normalizeUrl(link.href);
-      const fullName = norm(link.querySelector('span[aria-hidden="true"]').innerText);
-      if (!url || seen.has(url) || /membre linkedin|linkedin member/i.test(fullName)) continue;
+    const root = document.querySelector('main') || document.body;
+    for (const a of root.querySelectorAll('a[href*="/in/"]')) {
+      if (a.closest('#yucan-panel, nav, header, aside, [data-yucan]')) continue;
+      const url = normalizeUrl(a.href);
+      if (!url || seen.has(url)) continue;
+      const text = norm(a.querySelector('span[aria-hidden="true"]')?.innerText || a.innerText || a.getAttribute('aria-label'));
+      if (!text || !isNameLink(a)) continue; // photo ou relation en commun
+      const fullName = cleanName(a.querySelector('span[aria-hidden="true"]')?.innerText || a.innerText || a.getAttribute('aria-label'));
+      if (!fullName || /membre linkedin|linkedin member|utilisateur linkedin/i.test(fullName)) continue;
+      const card = cardFor(a);
       seen.add(url);
+      const lines = String(card.innerText || '').split('\n').map(norm).filter(Boolean)
+        .filter((l) => l !== fullName && !l.startsWith(fullName) && !DEGREE_RE.test(l) && !NOISE_RE.test(l))
+        .filter((l) => !/relations? en commun|in common|abonnés|followers/i.test(l));
       out.push({
         url,
         fullName,
-        headline: norm(li.querySelector('.entity-result__primary-subtitle, .t-14.t-black.t-normal')?.innerText),
-        location: norm(li.querySelector('.entity-result__secondary-subtitle, .t-14.t-normal:not(.t-black)')?.innerText),
+        headline: norm(card.querySelector('.entity-result__primary-subtitle')?.innerText) || lines[0] || '',
+        location: norm(card.querySelector('.entity-result__secondary-subtitle')?.innerText) || lines[1] || '',
       });
     }
     return out;
@@ -417,6 +459,7 @@
     const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const field = 'width:100%;padding:6px;margin-bottom:8px;border:0;border-radius:8px;color:#2a1033;box-sizing:border-box';
     panel = document.createElement('div');
+    panel.id = 'yucan-panel';
     panel.dataset.kind = kind;
     panel.dataset.path = location.pathname;
     panel.style.cssText =
